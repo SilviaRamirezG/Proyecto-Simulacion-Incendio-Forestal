@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Forest Fire Model (Drossel–Schwabl)</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+/* ── Estilos Visuales (Basados en tu referencia de texto grande) ── */
+:root {
+    --bg: #0d0d0d;
+    --panel: #1a1a1a;
+    --accent: #ff4757;
+    --accent-blue: #3b82f6;
+    --text: #ffffff;
+    --muted: #a4b0be;
+    --font-main: 1.1rem;
+    --font-ui: 1rem;
+    --border: #2f3542;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    font-size: var(--font-main);
+}
+
+/* ── Header Estilo Grande ── */
+header {
+    background: var(--panel);
+    padding: 15px 25px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid #333;
+    flex-shrink: 0;
+}
+
+header h2 {
+    font-size: 1.5rem;
+    margin: 0;
+    letter-spacing: 1px;
+    color: var(--text);
+}
+
+.controls-top {
+    display: flex;
+    gap: 30px;
+    align-items: center;
+}
+
+/* ── Layout Principal ── */
+.main-container {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 25px;
+    padding: 25px;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+/* ── Canvas Estilo Referencia ── */
+.canvas-container {
+    background: #000;
+    border-radius: 8px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid var(--border);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    position: relative;
+}
+
+canvas#main-canvas {
+    image-rendering: pixelated;
+    max-width: 95%;
+    max-height: 95%;
+}
+
+/* ── Sidebar Estilo Referencia ── */
+.sidebar {
+    background: var(--panel);
+    padding: 25px;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    border: 1px solid var(--border);
+    overflow-y: auto;
+}
+
+.stats-header {
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    border-bottom: 1px solid #333;
+    padding-bottom: 5px;
+}
+
+#stats-text {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.1rem;
+    line-height: 1.6;
+    margin-bottom: 10px;
+}
+
+/* ── Inputs y Botones Grandes ── */
+.control-group { display: flex; flex-direction: column; gap: 6px; }
+.control-group label { font-size: 0.9rem; font-weight: 600; color: var(--muted); }
+
+input[type="text"], input[type="number"] {
+    background: #2f3542;
+    border: 1px solid #57606f;
+    color: white;
+    padding: 8px;
+    border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1rem;
+}
+
+.btn {
+    cursor: pointer;
+    border: none;
+    padding: 10px 15px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+    font-family: 'Space Grotesk', sans-serif;
+    text-transform: uppercase;
+}
+
+.btn-primary { background: var(--accent); color: white; }
+.btn-weather { background: var(--accent-blue); color: white; }
+.btn-secondary { background: #57606f; color: white; }
+.btn-danger { background: #ff4757; color: white; opacity: 0.7; }
+.btn-danger:hover { opacity: 1; }
+
+/* ── Secciones Específicas de tu Código Original ── */
+.speed-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+.spd { 
+    background: #2f3542; border: 1px solid #57606f; color: white; 
+    padding: 8px 0; border-radius: 4px; cursor: pointer; font-size: 0.8rem;
+}
+.spd.on { background: var(--accent-blue); border-color: white; }
+
+.log-wrap {
+    height: 120px;
+    background: #000;
+    border-radius: 4px;
+    padding: 10px;
+    overflow-y: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+}
+
+.chart-container {
+    height: 250px;
+    border-left: 2px solid var(--border);
+    border-bottom: 2px solid var(--border);
+    position: relative;
+    margin-top: 20px;
+    background: rgba(255,255,255,0.02);
+}
+
+.chart-label {
+    position: absolute;
+    transform: rotate(-90deg);
+    left: -70px;
+    top: 50%;
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<header>
+    <h2>Forest Fire Model</h2>
+    <div class="controls-top">
+        <div class="control-group">
+            <label>Growth (p): <span id="ov-p" style="color:var(--accent-blue)">—</span></label>
+            <input type="number" id="inp-p" value="0.05" step="0.001" style="width:100px">
+        </div>
+        <div class="control-group">
+            <label>Lightning (f): <span id="ov-f" style="color:var(--accent-blue)">—</span></label>
+            <input type="number" id="inp-f" value="0.001" step="0.0001" style="width:100px">
+        </div>
+        <button class="btn btn-primary" id="btn-create">Iniciar Simulación</button>
+    </div>
+</header>
+
+<div class="main-container">
+    <div class="canvas-container">
+        <canvas id="main-canvas" width="700" height="700"></canvas>
+    </div>
+
+    <aside class="sidebar">
+        <!-- Stats -->
+        <div>
+            <div class="stats-header">Estado del Sistema</div>
+            <div id="stats-text">
+                ID: <span id="sid-disp" style="font-size:0.7rem; color:var(--muted)">—</span><br>
+                Pasos: <span id="st-steps" style="color:var(--accent)">—</span><br>
+                Densidad: <span id="st-density" style="color:#2ecc71">—</span>
+            </div>
+        </div>
+
+        <!-- Controles de ejecución -->
+        <div class="control-group">
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <button class="btn btn-secondary" id="btn-step1">Paso ×1</button>
+                <button class="btn btn-secondary" id="btn-step10">Paso ×10</button>
+            </div>
+            <button class="btn btn-primary" id="btn-auto" style="margin-top:5px">Ejecutar Auto</button>
+        </div>
+
+        <!-- Velocidad -->
+        <div class="control-group">
+            <label>Velocidad de Simulación</label>
+            <div class="speed-row">
+                <button class="spd" data-ms="500">0.5s</button>
+                <button class="spd on" data-ms="200">0.2s</button>
+                <button class="spd" data-ms="100">0.1s</button>
+                <button class="spd" data-ms="50">50ms</button>
+            </div>
+        </div>
+
+        <!-- Clima -->
+        <div class="control-group" style="background: rgba(59, 130, 246, 0.1); padding: 15px; border-radius: 8px;">
+            <label>Weather API (Open-Meteo)</label>
+            <div style="display:flex; gap:10px;">
+                <input type="text" id="inp-city" placeholder="Ciudad..." style="flex:1">
+                <button class="btn btn-weather" id="btn-weather">Fetch</button>
+            </div>
+        </div>
+
+        <!-- Patch -->
+        <div class="control-group">
+            <div class="stats-header">Modificar Parámetros</div>
+            <div style="display:flex; gap:10px; margin-bottom:5px">
+                <input type="number" id="patch-p" step="0.001" placeholder="Nuevo p" style="width:50%">
+                <input type="number" id="patch-f" step="0.0001" placeholder="Nuevo f" style="width:50%">
+            </div>
+            <button class="btn btn-secondary" id="btn-patch">Aplicar Cambios</button>
+        </div>
+
+        <!-- Histograma -->
+        <div class="chart-container">
+            <div class="chart-label">Distribución Incendios (Log-Log)</div>
+            <canvas id="hist-canvas"></canvas>
+        </div>
+
+        <!-- Log -->
+        <div class="log-wrap" id="log-area"></div>
+
+        <!-- Eliminar -->
+        <button class="btn btn-danger" id="btn-delete">Eliminar Simulación</button>
+        
+        <!-- Input de tamaño (movido aquí para no saturar el header) -->
+        <div class="control-group">
+            <label>Tamaño Grid (20-200)</label>
+            <input type="number" id="inp-size" value="80">
+        </div>
+    </aside>
+</div>
+
+<script>
+/* ── Lógica Original Intacta ── */
+let simId=null,autoInt=null,autoMs=200,running=false;
+const cv=document.getElementById('main-canvas'),cx=cv.getContext('2d');
+const hv=document.getElementById('hist-canvas'),hx=hv.getContext('2d');
+
+document.querySelectorAll('.spd').forEach(b=>{
+    b.onclick=()=>{
+        document.querySelectorAll('.spd').forEach(x=>x.classList.remove('on'));
+        b.classList.add('on');autoMs=+b.dataset.ms;
+        if(running){clearInterval(autoInt);autoInt=setInterval(()=>runStep(1),autoMs);}
+    };
+});
+
+function log(m,type='info'){
+    const a=document.getElementById('log-area');
+    const d=document.createElement('div');
+    const t=new Date().toLocaleTimeString();
+    const c=type==='err'?'#ff4757':type==='ok'?'#2ecc71':'#3b82f6';
+    d.style.color = "#ccc";
+    d.style.marginBottom = "4px";
+    d.innerHTML=`<span style="color:${c}">[${t}]</span> ${m}`;
+    a.insertBefore(d,a.firstChild);
+}
+
+async function api(url,opts={}){
+    const r=await fetch(url,{headers:{'Content-Type':'application/json'},...opts});
+    if(!r.ok){const e=await r.json().catch(()=>({error:r.statusText}));throw new Error(e.error||r.statusText);}
+    if(r.status===204)return null;return r.json();
+}
+
+function renderGrid(grid){
+    const N=grid.length,W=cv.width,H=cv.height;
+    const cw=W/N,ch=H/N;
+    cx.fillStyle='#000';cx.fillRect(0,0,W,H);
+    for(let r=0;r<N;r++){
+        for(let c=0;c<N;c++){
+            const s=grid[r][c];if(s===0)continue;
+            if(s===1) cx.fillStyle='#2ecc71';
+            else cx.fillStyle='#ff5500';
+            cx.fillRect(c*cw,r*ch,cw,cw);
+        }
+    }
+}
+
+function renderHistogram(hist){
+    const W=hv.offsetWidth||350,H=hv.offsetHeight||250;
+    hv.width=W;hv.height=H;
+    hx.clearRect(0,0,W,H);
+    const entries=Object.entries(hist || {}).map(([k,v])=>[+k,v]).filter(e=>e[0]>0&&e[1]>0);
+    if(entries.length<1) return;
+    entries.forEach(([size, count]) => {
+        const x = (Math.log10(size) / 3) * (W - 20) + 10;
+        const y = H - (Math.log10(count + 1) / 5) * (H - 20) - 10;
+        hx.fillStyle = '#f1c40f';
+        hx.beginPath(); hx.arc(x, y, 4, 0, Math.PI*2); hx.fill();
+    });
+}
+
+function updateUI(data){
+    renderGrid(data.grid);
+    renderHistogram(data.fire_histogram);
+    const d=(data.tree_density*100).toFixed(1)+'%';
+    document.getElementById('ov-p').textContent=data.p;
+    document.getElementById('ov-f').textContent=data.f;
+    document.getElementById('st-steps').textContent=data.steps;
+    document.getElementById('st-density').textContent=d;
+    document.getElementById('sid-disp').textContent=data.id;
+}
+
+document.getElementById('btn-create').onclick=async()=>{
+    stopAuto();
+    try{
+        const data=await api('/api/simulations/',{method:'POST',body:JSON.stringify({
+            size:+document.getElementById('inp-size').value,
+            p:+document.getElementById('inp-p').value,
+            f:+document.getElementById('inp-f').value
+        })});
+        simId=data.id;updateUI(data);
+        log(`Simulación iniciada: ${data.size}x${data.size}`,'ok');
+    }catch(e){log(e.message,'err');}
+};
+
+async function runStep(n=1){
+    if(!simId)return;
+    try{const data=await api(`/api/simulations/${simId}/step/`,{method:'POST',body:JSON.stringify({steps:n})});updateUI(data);}
+    catch(e){log(e.message,'err');}
+}
+
+document.getElementById('btn-step1').onclick=()=>runStep(1);
+document.getElementById('btn-step10').onclick=()=>runStep(10);
+document.getElementById('btn-auto').onclick=()=>running?stopAuto():startAuto();
+
+function startAuto(){
+    if(!simId)return log('Crea una simulación primero','err');
+    running=true;document.getElementById('btn-auto').textContent='Detener Auto';
+    autoInt=setInterval(()=>runStep(1),autoMs);
+}
+function stopAuto(){
+    running=false;clearInterval(autoInt);
+    document.getElementById('btn-auto').textContent='Ejecutar Auto';
+}
+
+document.getElementById('btn-patch').onclick=async()=>{
+    if(!simId)return;
+    const body={};
+    const pv=document.getElementById('patch-p').value;
+    const fv=document.getElementById('patch-f').value;
+    if(pv!=='')body.p=+pv;if(fv!=='')body.f=+fv;
+    try{const data=await api(`/api/simulations/${simId}/`,{method:'PATCH',body:JSON.stringify(body)});updateUI(data);log(`Parámetros actualizados`,'ok');}
+    catch(e){log(e.message,'err');}
+};
+
+document.getElementById('btn-delete').onclick=async()=>{
+    if(!simId)return;stopAuto();
+    try{
+        await api(`/api/simulations/${simId}/`,{method:'DELETE'});
+        simId=null; cx.clearRect(0,0,cv.width,cv.height);
+        log('Simulación eliminada','ok');
+    }catch(e){log(e.message,'err');}
+};
+
+document.getElementById('btn-weather').onclick=async()=>{
+    const city=document.getElementById('inp-city').value.trim();
+    if(!city)return;
+    try{
+        log(`Consultando clima: ${city}`);
+        const data=await api(`/api/weather/?city=${encodeURIComponent(city)}`);
+        document.getElementById('inp-p').value=data.p;
+        document.getElementById('inp-f').value=data.f;
+        log(`Clima aplicado: p=${data.p} f=${data.f}`,'ok');
+    }catch(e){log(e.message,'err');}
+};
+
+// Canvas inicial
+cx.fillStyle='#000';cx.fillRect(0,0,cv.width,cv.height);
+cx.fillStyle='#333';cx.font='20px Space Grotesk';cx.textAlign='center';
+cx.fillText('Presiona Iniciar Simulación',cv.width/2,cv.height/2);
+</script>
+</body>
+</html>
